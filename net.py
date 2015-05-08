@@ -1,3 +1,85 @@
+import multiprocessing as mp
+import Queue
+import threading
+Conv2DLayer = tmp_dnn.Conv2DDNNLayer
+MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
+#real-time aug based on Sander Dielman's KDSB solution
+
+
+
+maps = {'breedlove': 9,
+ 'dean': 11,
+ 'epiphone': 1,
+ 'esp': 5,
+ 'fender': 6,
+ 'g&l': 14,
+ 'gibson': 18,
+ 'gretsch': 13,
+ 'guild': 4,
+ 'ibanez': 12,
+ 'jackson': 17,
+ 'martin': 15,
+ 'music man': 10,
+ 'paul reed smith': 8,
+ 'rickenbacker': 2,
+ 'schecter': 20,
+ 'squier': 16,
+ 'taylor': 3,
+ 'washburn': 19,
+ 'yamaha': 7}
+
+
+
+#sander realtime gen
+def buffered_gen_mp(source_gen, buffer_size=2):
+    """
+    Generator that runs a slow source generator in a separate process.
+    buffer_size: the maximal number of items to pre-generate (length of the buffer)
+    """
+    if buffer_size < 2:
+        raise RuntimeError("Minimal buffer size is 2!")
+ 
+    buffer = mp.Queue(maxsize=buffer_size - 1)
+    # the effective buffer size is one less, because the generation process
+    # will generate one extra element and block until there is room in the buffer.
+ 
+    def _buffered_generation_process(source_gen, buffer):
+        for data in source_gen:
+            buffer.put(data, block=True)
+        buffer.put(None) # sentinel: signal the end of the iterator
+        buffer.close() # unfortunately this does not suffice as a signal: if buffer.get()
+        # was called and subsequently the buffer is closed, it will block forever.
+ 
+    process = mp.Process(target=_buffered_generation_process, args=(source_gen, buffer))
+    process.start()
+ 
+    for data in iter(buffer.get, None):
+        yield data
+
+def buffered_gen_threaded(source_gen, buffer_size=2):
+    """
+    Generator that runs a slow source generator in a separate thread. Beware of the GIL!
+    buffer_size: the maximal number of items to pre-generate (length of the buffer)
+    """
+    if buffer_size < 2:
+        raise RuntimeError("Minimal buffer size is 2!")
+ 
+    buffer = Queue.Queue(maxsize=buffer_size - 1)
+    # the effective buffer size is one less, because the generation process
+    # will generate one extra element and block until there is room in the buffer.
+ 
+    def _buffered_generation_thread(source_gen, buffer):
+        for data in source_gen:
+            buffer.put(data, block=True)
+        buffer.put(None) # sentinel: signal the end of the iterator
+ 
+    thread = threading.Thread(target=_buffered_generation_thread, args=(source_gen, buffer))
+    thread.daemon = True
+    thread.start()
+
+    for data in iter(buffer.get, None):
+        yield data
+
 
 
 class ZMUV(object):
@@ -20,9 +102,11 @@ class ZMUV(object):
 
 
 class TestData(object):
-    def __init__(self,path):
+    def __init__(self, path, zmuv, maps=maps):
+        self.zmuv = zmuv
         self.base_folder = path
         self.files=os.listdir(self.base_folder)[1:]
+        self.mapping = maps
 
     def create_test_matrix(self, files):
         #better way to do this. Has to be.
@@ -48,7 +132,6 @@ class TrainDatasetMiniBatchIterator(object):
     def __init__(self, path, total_epochs, zmuv, 
                         train_or_valid='train', 
                         mapping = maps, batch_size=128):
-
         self.zmuv = zmuv
         self.batch_size = batch_size
         self.total_epochs = total_epochs
@@ -93,8 +176,64 @@ class TrainDatasetMiniBatchIterator(object):
         for i in xrange(1,self.val):
             yield self.create_matrix(self.batches[i]) 
 
-Conv2DLayer = tmp_dnn.Conv2DDNNLayer
-MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
+
+
+class TrainDatasetMiniBatchIterator(object):
+    """  batch iterator """
+    def __init__(self, path, total_epochs, zmuv, 
+                        train_or_valid='train', 
+                        mapping = maps, batch_size=128):
+        self.zmuv = zmuv
+        self.batch_size = batch_size
+        self.total_epochs = total_epochs
+        self.mapping = mapping
+        self.base_folder = path+'/'+train_test_valid
+        self.files=os.listdir(self.base_folder)[1:]
+        self.n_samples = len(self.files)
+        self.val = (self.n_samples + self.batch_size - 1) / self.batch_size
+        self.batches = {}
+        count = 1
+        num = 1
+        batch_values = []
+        for i in self.files[1:]:
+            if count > self.val:
+                self.batches[num] = batch_values
+                count = 1
+                num += 1
+                batch_values = []
+            count += 1
+            batch_values.append(i)
+
+    def create_matrix(self, files):
+        #add test time augmentation
+        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+'/'+name+'/'+name+'.png')) for name in files])
+        ymatrix = np.hstack([self.mapping[open(self.base_folder+'/'+name+'/label.txt').read()] for name in files])
+        xmatrix = xmatrix.reshape((self.batch_size, 3, 640, 640)) 
+        ymatrix = np.array(ymatrix,dtype = 'int32')
+        #TODO: add rotations and zooming.
+
+        #apply ZMUV to batch
+        for image in xmatrix:
+            image[0] -= self.zmuv.zmuv_mean_0
+            image[1] -= self.zmuv.zmuv_mean_1
+            image[2] -= self.zmuv.zmuv_mean_2
+            image[0] /= self.zmuv.zmuv_stds_0
+            image[1] /= self.zmuv.zmuv_stds_1
+            image[2] /= self.zmuv.zmuv_stds_2
+        yield xmatrix,ymatrix
+
+    def data_generator(self):
+        for i in xrange(1,self.val):
+            yield self.create_matrix(self.batches[i]) 
+
+    def create_gen(self):
+        gen = data_generator()
+
+        def random_gen():
+            for x, y in gen:
+                yield x, y
+
+        return buffered_gen_threaded(random_gen())
 
 
 
@@ -228,6 +367,9 @@ class Net(object):
         train_scoref = self.score_classif(train_set_iterator)
         dev_scoref = self.score_classif(dev_set_iterator)
         best_dev_loss = numpy.inf
+
+
+        #create_train_gen = lambda: self.data_loader.create_random_gen(self.data_loader.images_train, self.data_loader.labels_train)
 
 
 
