@@ -1,6 +1,8 @@
 import multiprocessing as mp
 import Queue
 import threading
+import lasagne as nn
+
 Conv2DLayer = tmp_dnn.Conv2DDNNLayer
 MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
 #real-time aug based on Sander Dielman's KDSB solution
@@ -89,7 +91,8 @@ class ZMUV(object):
 
     def estimate_params(self):
         files = random.sample(self.files,15000)
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+'/train/'+name+'/'+name+'.png')) for name in files])
+        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
+                            '/train/'+name+'/'+name+'.png')) for name in files])
         xmatrix = xmatrix.reshape((15000, 3, 640, 640)) 
 
         self.zmuv_mean_0 = np.mean([x[0] for x in xmatrix])
@@ -102,16 +105,18 @@ class ZMUV(object):
 
 
 class TestData(object):
-    def __init__(self, path, zmuv, maps=maps):
+    def __init__(self, base_path, zmuv, maps=maps):
         self.zmuv = zmuv
-        self.base_folder = path
+        self.base_folder = base_path
         self.files=os.listdir(self.base_folder)[1:]
         self.mapping = maps
 
     def create_test_matrix(self, files):
         #better way to do this. Has to be.
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+'/train/'+name+'/'+name+'.png')) for name in self.files])
-        ymatrix = np.hstack([self.mapping[open(self.base_folder+'/'+name+'/label.txt').read()] for name in sef.files])
+        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
+                            '/train/'+name+'/'+name+'.png')) for name in self.files])
+        ymatrix = np.hstack([self.mapping[open(self.base_folder+
+                            '/'+name+'/label.txt').read()] for name in sef.files])
         xmatrix = xmatrix.reshape((len(self.files), 3, 640, 640)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
@@ -127,7 +132,7 @@ class TestData(object):
         return xmatrix,ymatrix
 
 
-class TrainDatasetMiniBatchIterator(object):
+class TrainIterator(object):
     """  batch iterator """
     def __init__(self, path, total_epochs, zmuv, 
                         train_or_valid='train', 
@@ -156,8 +161,10 @@ class TrainDatasetMiniBatchIterator(object):
 
     def create_matrix(self, files):
         #add test time augmentation
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+'/'+name+'/'+name+'.png')) for name in files])
-        ymatrix = np.hstack([self.mapping[open(self.base_folder+'/'+name+'/label.txt').read()] for name in files])
+        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
+                            '/'+name+'/'+name+'.png')) for name in files])
+        ymatrix = np.hstack([self.mapping[open(self.base_folder+
+                        '/'+name+'/label.txt').read()] for name in files])
         xmatrix = xmatrix.reshape((self.batch_size, 3, 640, 640)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
@@ -206,8 +213,10 @@ class TrainDatasetMiniBatchIterator(object):
 
     def create_matrix(self, files):
         #add test time augmentation
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+'/'+name+'/'+name+'.png')) for name in files])
-        ymatrix = np.hstack([self.mapping[open(self.base_folder+'/'+name+'/label.txt').read()] for name in files])
+        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
+                                '/'+name+'/'+name+'.png')) for name in files])
+        ymatrix = np.hstack([self.mapping[open(self.base_folder+
+                                '/'+name+'/label.txt').read()] for name in files])
         xmatrix = xmatrix.reshape((self.batch_size, 3, 640, 640)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
@@ -239,16 +248,11 @@ class TrainDatasetMiniBatchIterator(object):
 
 class Net(object):
 
-    """ VGG style net for guitar classification. Using Sander's layers and initialization"""
+    """ VGG style net for guitar classification. 
+        Using Sander's layers and initialization"""
     
-    def __init__(self, ndim = 3,...):
+    def __init__(self, out = 20, ...):
         self.output_dim = out
-
-
-        NUM_EPOCHS = 5000
-        BATCH_SIZE = 600
-        LEARNING_RATE = 0.01
-        MOMENTUM = 0.9
         self.batch_size = 128
         self.x = T.fmatrix('x')
         self.y = T.ivector('y')
@@ -261,50 +265,58 @@ class Net(object):
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M1 = MaxPool2DLayer(self.C3, ds=(3, 3), strides=(2, 2))
         self.D1 = lasagne.layers.DropoutLayer(self.M1, p=0.5)
+
         self.C3 = Conv2DLayer(self.D1, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C4 = Conv2DLayer(self.C3, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M2 = MaxPool2DLayer(self.C4, ds=(3, 3), strides=(2, 2))
         self.D2 = lasagne.layers.DropoutLayer(self.M2, p=0.5)
+
         self.C5 = Conv2DLayer(self.D2, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C6 = Conv2DLayer(self.C5, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M3 = MaxPool2DLayer(self.C6, ds=(3, 3), strides=(2, 2))
         self.D3 = lasagne.layers.DropoutLayer(self.M3, p=0.5)
+
         self.FC1 = nn.layers.DenseLayer(self.D3, num_units=256, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.D4 = lasagne.layers.DropoutLayer(self.FC1, p=0.5)
         self.FC2 = nn.layers.DenseLayer(self.D4, num_units=256, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        
         self.O = nn.layers.DenseLayer(self.FC2, num_units=self.output_dim, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn.nonlinearities.softmax)
-       
+        self.objective = lasagne.objectives.Objective(self.O, 
+                                    loss_function=lasagne.objectives.categorical_crossentropy)
 
-        self.objective = lasagne.objectives.Objective(self.O, loss_function=lasagne.objectives.categorical_crossentropy)
-        self.mean_cost = self.objective.get_loss(self.x, target=self.y)
-        self.probs = self.objective.get_output(self.x, deterministic=True)
+
+        self.loss = self.objective.get_loss(self.x, target=self.y)
+        self.probabilities = self.objective.get_output(self.x, deterministic=True)
         self.pred = T.argmax(self.objective.get_output(self.x, deterministic=True), axis=1)
         self.errors  = T.mean(T.eq(self.pred, self.y), dtype=theano.config.floatX)
 
+        #get weights
+        self.all_params = nn.layers.get_all_params(self.objective)
 
-    def get_trainer(self):
+        #set init values to None
+        self.momentum = 0
+        self.learning_rate = 0
+        self.updates = nn.updates.nesterov_momentum(self.loss, self.all_params, self.learning_rate, self.momentum)
+
+    def nesterov_trainer(self):
         batch_x = T.matrix('batch_x')
         batch_y = T.vector('batch_y')
-        loss_train = objective.get_loss(batch_x, target=batch_y)
-        self.mean_cost = 
-        pred = T.argmax(self.objective.get_output(batch_x, deterministic=True), axis=1)
-        accuracy = T.mean(T.eq(pred, y_batch), dtype=theano.config.floatX)
-        all_params = lasagne.layers.get_all_params(output_layer)
-        updates = lasagne.updates.nesterov_momentum(loss_train, all_params, learning_rate, momentum)
+        learning_rate = T.fscalar('lr')
+        #avg_cost = train_fn(x, y, lr=1.E-2)
         train_fn = theano.function(inputs=[theano.Param(batch_x),
-                                       theano.Param(batch_y)],
-                               outputs=self.mean_cost,
-                               updates=updates,
+                                            theano.Param(batch_y)
+                                            theano.Param(lr)],
+                               outputs=self.loss,
+                               updates=self.updates,
                                givens={self.x: batch_x, self.y: batch_y})
         return train_fn
+
 
 
     def score_classif(self, given_set):
@@ -326,7 +338,7 @@ class Net(object):
     def predict_(self, given_set):
         batch_x = T.fmatrix('batch_x')
         pred = theano.function(inputs=[theano.Param(batch_x)],
-                                outputs=self.ypred,
+                                outputs=self.pred,
                                 givens={self.x: batch_x})
         def predict():
             return pred(given_set)
@@ -342,43 +354,37 @@ class Net(object):
             return pred_prob(given_set)
         return predict_probf
 
-    #needs a bit of work here
-    def fit(max_epochs=300, early_stopping=True, split_ratio=0.1,
-            verbose=False, plot=False):
+    #TODO a lot
+    def train(self, learning_schedule = {0: 0.0015, 700: 0.00015,  800: 0.000015}, 
+                momentum = 0.9, max_epochs=300, early_stopping=True, 
+                verbose=False):
 
-        """
-        Fits the neural network to `x_train` and `y_train`. 
-        If x_dev nor y_dev are not given, it will do a `split_ratio` cross-
-        validation split on `x_train` and `y_train` (for early stopping).
-        """
-        if x_dev == None or y_dev == None:
-            x_train, x_dev, y_train, y_dev = train_test_split(x_train, y_train,
-                test_size=split_ratio, random_state=42)
 
-        #training function is already adadelta
-        train_fn = self.get_trainer()
+        self.learning_rate_schedule = learning_schedule
+        self.learning_rate = theano.shared(np.float32(learning_rate_schedule[0]))
+        self.momentum = momentum
+
+
+        train_fn = self.nesterov_trainer() #nesterov with momentum.
+        nester
         zmuv = ZMUV()
-        print 'Zero Mean Unit variance'
+        print 'getting Zero Mean Unit variance'
         zmuv.estimate_params()
-
 
         train_set_iterator = TrainDatasetMiniBatchIterator(os.getcwd(), total_epochs ,zmuv=zmuv, train_test_or_valid='train')
         dev_set_iterator = TrainDatasetMiniBatchIterator(os.getcwd(), total_epochs, zmuv=zmuv ,train_test_or_valid='valid')
         train_scoref = self.score_classif(train_set_iterator)
         dev_scoref = self.score_classif(dev_set_iterator)
         best_dev_loss = numpy.inf
-
-
-        #create_train_gen = lambda: self.data_loader.create_random_gen(self.data_loader.images_train, self.data_loader.labels_train)
-
-
+        
+        #for loading the data onto the gpu
+        create_train_gen = lambda: self.train_set_iterator.create__gen()
+        xs_shared = [nn.utils.shared_empty(dim=ndim) for ndim in input_ndims]
+        y_shared = nn.utils.shared_empty(dim=2)
 
         patience = 1000  
-        patience_increase = 2.  # wait this much longer when a new best is
-                                # found
-        improvement_threshold = 0.995  # a relative improvement of this much is
-                                       # considered significant
-
+        patience_increase = 2.
+        improvement_threshold = 0.995
         done_looping = False
         print '... training the model'
         test_score = 0.
@@ -406,8 +412,15 @@ class Net(object):
             avg_costs = []
             timer = time.time()
             for iteration, (x, y) in enumerate(train_set_iterator):
+
+                if iteration in self.learning_rate_schedule:
+                    lr = np.float32(learning_rate_schedule[e])
+                    print "  setting learning rate to %.7f" % lr
+                    self.learning_rate.set_value(lr)
+
+
                 #call the training function
-                avg_cost = train_fn(x, y)
+                avg_cost = train_fn(x, y, learning_rate)
                 if type(avg_cost) == list:
                     avg_costs.append(avg_cost[0])
                 else:
@@ -447,8 +460,5 @@ class Net(object):
             print("")
         for i, param in enumerate(best_params):
             self.params[i] = param
-
-
-
 
 
