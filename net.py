@@ -104,7 +104,7 @@ class ZMUV(object):
         del(xmatrix)
 
 
-class TestData(object):
+class ValidData(object):
     def __init__(self, base_path, zmuv, maps=maps):
         self.zmuv = zmuv
         self.base_folder = base_path
@@ -114,9 +114,9 @@ class TestData(object):
     def create_test_matrix(self, files):
         #better way to do this. Has to be.
         xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                            '/train/'+name+'/'+name+'.png')) for name in self.files])
+                            '/valid/'+name+'/'+name+'.png')) for name in self.files])
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                            '/'+name+'/label.txt').read()] for name in sef.files])
+                            '/valid/'+name+'/label.txt').read()] for name in sef.files])
         xmatrix = xmatrix.reshape((len(self.files), 3, 640, 640)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
@@ -132,40 +132,21 @@ class TestData(object):
         return xmatrix,ymatrix
 
 
-class TrainIterator(object):
-    """  batch iterator """
-    def __init__(self, path, total_epochs, zmuv, 
-                        train_or_valid='train', 
-                        mapping = maps, batch_size=128):
+
+class TestData(object):
+    def __init__(self, base_path, zmuv, maps=maps):
         self.zmuv = zmuv
-        self.batch_size = batch_size
-        self.total_epochs = total_epochs
-        self.mapping = mapping
-        self.base_folder = path+'/'+train_test_valid
+        self.base_folder = base_path
         self.files=os.listdir(self.base_folder)[1:]
-        self.n_samples = len(self.files)
-        self.val = (self.n_samples + self.batch_size - 1) / self.batch_size
-        self.batches = {}
-        count = 1
-        num = 1
-        batch_values = []
-        for i in self.files[1:]:
-            if count > self.val:
-                self.batches[num] = batch_values
-                count = 1
-                num += 1
-                batch_values = []
-            count += 1
-            batch_values.append(i)
+        self.mapping = maps
 
-
-    def create_matrix(self, files):
-        #add test time augmentation
+    def create_test_matrix(self, files):
+        #better way to do this. Has to be.
         xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                            '/'+name+'/'+name+'.png')) for name in files])
+                            '/test/'+name+'/'+name+'.png')) for name in self.files])
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                        '/'+name+'/label.txt').read()] for name in files])
-        xmatrix = xmatrix.reshape((self.batch_size, 3, 640, 640)) 
+                            '/test/'+name+'/label.txt').read()] for name in sef.files])
+        xmatrix = xmatrix.reshape((len(self.files), 3, 640, 640)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
 
@@ -179,22 +160,21 @@ class TrainIterator(object):
             image[2] /= self.zmuv.zmuv_stds_2
         return xmatrix,ymatrix
 
-    def __iter__(self):
-        for i in xrange(1,self.val):
-            yield self.create_matrix(self.batches[i]) 
 
 
 
-class TrainDatasetMiniBatchIterator(object):
+
+
+
+class TrainData(object):
     """  batch iterator """
-    def __init__(self, path, total_epochs, zmuv, 
-                        train_or_valid='train', 
+    def __init__(self, path, total_epochs, zmuv,
                         mapping = maps, batch_size=128):
         self.zmuv = zmuv
         self.batch_size = batch_size
         self.total_epochs = total_epochs
         self.mapping = mapping
-        self.base_folder = path+'/'+train_test_valid
+        self.base_folder = path+'/'+'train/'
         self.files=os.listdir(self.base_folder)[1:]
         self.n_samples = len(self.files)
         self.val = (self.n_samples + self.batch_size - 1) / self.batch_size
@@ -257,7 +237,7 @@ class Net(object):
         self.x = T.fmatrix('x')
         self.y = T.ivector('y')
 
-
+        #layers
         self.l_in = lasagne.layers.InputLayer(shape=(self.batch_size, 3, 640, 640))        
         self.C1 = Conv2DLayer(self.l_in, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
@@ -356,10 +336,11 @@ class Net(object):
 
     #TODO a lot
     def train(self, learning_schedule = {0: 0.0015, 700: 0.00015,  800: 0.000015}, 
-                momentum = 0.9, max_epochs=300, early_stopping=True, 
-                verbose=False):
+                momentum = 0.9, max_epochs=300, early_stopping=True,
+                save_every = 20, save_path = os.getcwd()):
 
-
+        self.save_every = save_every
+        self.metadata_tmp_path, = save_path
         self.learning_rate_schedule = learning_schedule
         self.learning_rate = theano.shared(np.float32(learning_rate_schedule[0]))
         self.momentum = momentum
@@ -371,16 +352,14 @@ class Net(object):
         print 'getting Zero Mean Unit variance'
         zmuv.estimate_params()
 
-        train_set_iterator = TrainDatasetMiniBatchIterator(os.getcwd(), total_epochs ,zmuv=zmuv, train_test_or_valid='train')
-        dev_set_iterator = TrainDatasetMiniBatchIterator(os.getcwd(), total_epochs, zmuv=zmuv ,train_test_or_valid='valid')
+        train_set_iterator = TrainData(os.getcwd(), max_epochs ,zmuv=zmuv, train_test_or_valid='train')
+        dev_set_iterator = ValidData(os.getcwd(), zmuv=zmuv ,train_test_or_valid='valid')
         train_scoref = self.score_classif(train_set_iterator)
         dev_scoref = self.score_classif(dev_set_iterator)
         best_dev_loss = numpy.inf
         
         #for loading the data onto the gpu
         create_train_gen = lambda: self.train_set_iterator.create__gen()
-        xs_shared = [nn.utils.shared_empty(dim=ndim) for ndim in input_ndims]
-        y_shared = nn.utils.shared_empty(dim=2)
 
         patience = 1000  
         patience_increase = 2.
@@ -392,16 +371,6 @@ class Net(object):
         epoch = 0
         timer = None
 
-        if plot:
-            verbose = True
-            self._costs = []
-            self._train_errors = []
-            self._dev_errors = []
-            self._updates = []
-
-        self.stopcost = []
-        self.stopval= []
-
         while (epoch < max_epochs) and (not done_looping):
             zeros = []
             trainzeros= []
@@ -411,41 +380,61 @@ class Net(object):
                 sys.stdout.flush()
             avg_costs = []
             timer = time.time()
-            for iteration, (x, y) in enumerate(train_set_iterator):
+            for iteration, (x, y) in enumerate(create_train_gen):
 
                 if iteration in self.learning_rate_schedule:
-                    lr = np.float32(learning_rate_schedule[e])
+                    lr = np.float32(learning_rate_schedule[iteration])
                     print "  setting learning rate to %.7f" % lr
                     self.learning_rate.set_value(lr)
 
+                #print "  load training data onto GPU"
+                #for x_shared, x_chunk in zip(xs_shared, xs_chunk):
+                #    x_shared.set_value(x_chunk)
+                #y_shared.set_value(y_chunk)                
 
                 #call the training function
                 avg_cost = train_fn(x, y, learning_rate)
+                if np.isnan(avg_cost):
+                    raise RuntimeError("NaN DETECTED.")
+                
+                #reset it?
+                #xs_shared = [nn.utils.shared_empty(dim=ndim) for ndim in input_ndims]
+                #y_shared = nn.utils.shared_empty(dim=2)
                 if type(avg_cost) == list:
                     avg_costs.append(avg_cost[0])
                 else:
                     avg_costs.append(avg_cost)
-            if verbose:
-                mean_costs = numpy.mean(avg_costs)
-                mean_train_errors = numpy.mean(train_scoref())
+            
+                #for saving the batch
+                if ((iteration + 1) % self.save_every) == 0:
+                    print
+                    print "Saving metadata, parameters"
 
-                print('  epoch %i took %f seconds' %
-                    (epoch, time.time() - timer))
-                print('  epoch %i, avg costs %f' %
-                    (epoch, mean_costs))
-                print('  epoch %i, training error %f' %
-                    (epoch, mean_train_errors))
-                if plot:
-                    self._costs.append(mean_costs)
-                    self._train_errors.append(mean_train_errors)
+                    with open(self.metadata_tmp_path, 'w') as f:
+                        pickle.dump({
+                            'losses_train': avg_costs,
+                            'param_values': nn.layers.get_all_param_values(self.objective) ,
+                        }, f, pickle.HIGHEST_PROTOCOL)
+
+
+            mean_costs = numpy.mean(avg_costs)
+            mean_train_errors = numpy.mean(train_scoref())
+
+            print('  epoch %i took %f seconds' %
+                (epoch, time.time() - timer))
+            print('  epoch %i, avg costs %f' %
+                (epoch, mean_costs))
+            print('  epoch %i, training error %f' %
+                (epoch, mean_train_errors))
+            if plot:
+                self._costs.append(mean_costs)
+                self._train_errors.append(mean_train_errors)
 
             dev_errors = numpy.mean(dev_scoref())
-            if plot:
-                self._dev_errors.append(dev_errors)
 
             if dev_errors < best_dev_loss:
                 best_dev_loss = dev_errors
-                best_params = copy.deepcopy(self.params)
+                best_params = copy.deepcopy(self.all_params)
                 if verbose:
                     print('!!!  epoch %i, validation error of best model %f' %
                         (epoch, dev_errors))
@@ -458,7 +447,5 @@ class Net(object):
                   
         if not verbose:
             print("")
-        for i, param in enumerate(best_params):
-            self.params[i] = param
-
-
+        #for i, param in enumerate(best_params):
+        #    self.params[i] = param
