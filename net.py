@@ -2,6 +2,19 @@ import multiprocessing as mp
 import Queue
 import threading
 import lasagne as nn
+import nn_plankton
+import numpy as np
+import theano.tensor as T
+import time
+import os
+import sys
+import importlib
+import cPickle as pickle
+from datetime import datetime, timedelta
+import string
+from itertools import izip
+import matplotlib
+
 
 Conv2DLayer = tmp_dnn.Conv2DDNNLayer
 MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
@@ -162,10 +175,6 @@ class TestData(object):
 
 
 
-
-
-
-
 class TrainData(object):
     """  batch iterator """
     def __init__(self, path, total_epochs, zmuv,
@@ -238,37 +247,37 @@ class Net(object):
         self.y = T.ivector('y')
 
         #layers
-        self.l_in = lasagne.layers.InputLayer(shape=(self.batch_size, 3, 640, 640))        
+        self.l_in = nn.layers.InputLayer(shape=(self.batch_size, 3, 640, 640))        
         self.C1 = Conv2DLayer(self.l_in, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C2 = Conv2DLayer(self.C1, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M1 = MaxPool2DLayer(self.C3, ds=(3, 3), strides=(2, 2))
-        self.D1 = lasagne.layers.DropoutLayer(self.M1, p=0.5)
+        self.D1 = nn.layers.DropoutLayer(self.M1, p=0.5)
 
         self.C3 = Conv2DLayer(self.D1, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C4 = Conv2DLayer(self.C3, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M2 = MaxPool2DLayer(self.C4, ds=(3, 3), strides=(2, 2))
-        self.D2 = lasagne.layers.DropoutLayer(self.M2, p=0.5)
+        self.D2 = nn.layers.DropoutLayer(self.M2, p=0.5)
 
         self.C5 = Conv2DLayer(self.D2, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C6 = Conv2DLayer(self.C5, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.M3 = MaxPool2DLayer(self.C6, ds=(3, 3), strides=(2, 2))
-        self.D3 = lasagne.layers.DropoutLayer(self.M3, p=0.5)
+        self.D3 = nn.layers.DropoutLayer(self.M3, p=0.5)
 
         self.FC1 = nn.layers.DenseLayer(self.D3, num_units=256, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.D4 = lasagne.layers.DropoutLayer(self.FC1, p=0.5)
+        self.D4 = nn.layers.DropoutLayer(self.FC1, p=0.5)
         self.FC2 = nn.layers.DenseLayer(self.D4, num_units=256, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.O = nn.layers.DenseLayer(self.FC2, num_units=self.output_dim, W=nn_plankton.Orthogonal(1.0),
                              b=nn.init.Constant(0.1), nonlinearity=nn.nonlinearities.softmax)
-        self.objective = lasagne.objectives.Objective(self.O, 
-                                    loss_function=lasagne.objectives.categorical_crossentropy)
+        self.objective = nn.objectives.Objective(self.O, 
+                                    loss_function=nn.objectives.categorical_crossentropy)
 
 
         self.loss = self.objective.get_loss(self.x, target=self.y)
@@ -449,3 +458,10 @@ class Net(object):
             print("")
         #for i, param in enumerate(best_params):
         #    self.params[i] = param
+
+
+
+
+
+
+
