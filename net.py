@@ -225,7 +225,7 @@ class TrainData(object):
             yield self.create_matrix(self.batches[i]) 
 
     def create_gen(self):
-        gen = data_generator()
+        gen = self.data_generator()
 
         def random_gen():
             for x, y in gen:
