@@ -1,3 +1,12 @@
+import numpy as np
+import skimage
+import glob
+import os
+import skimage.io
+import skimage.transform
+import multiprocessing as mp
+
+
 
 default_augmentation_params = {
     'zoom_range': (1 / 1.1, 1.1),
@@ -120,8 +129,18 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
     out[:,:,1] = output[1]
     out[:,:,2] = output[2]
     return np.invert(np.asarray(out,dtype='int8'))
+if __name__ == '__main__':
+    from PIL import Image
+    import matplotlib.pyplot as plt
+    img = Image.open('552231568382a5e57c4651db567cbc0e/552231568382a5e57c4651db567cbc0e.png')
+    test = skimage.transform.rotate(img, 300, order=3)
+    plt.subplot(120),plt.imshow(img),plt.title('original')
+    plt.subplot(121),plt.imshow(test),plt.title('simple rotation')
+    plt.subplot(122),plt.imshow(ainv),plt.title('sander')
 
-test = rotate(img, 300, order=3)
-plt.subplot(120),plt.imshow(img),plt.title('original')
-plt.subplot(121),plt.imshow(test),plt.title('simple rotation')
-plt.subplot(122),plt.imshow(ainv),plt.title('sander')
+
+
+
+
+
+
