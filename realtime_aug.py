@@ -132,11 +132,15 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
 if __name__ == '__main__':
     from PIL import Image
     import matplotlib.pyplot as plt
-    img = Image.open('552231568382a5e57c4651db567cbc0e/552231568382a5e57c4651db567cbc0e.png')
-    test = skimage.transform.rotate(img, 300, order=3)
+    img = np.asarray(Image.open('552231568382a5e57c4651db567cbc0e/552231568382a5e57c4651db567cbc0e.png'))
+    sfs = [1.0]
+    patch_sizes = ([500,500])
+    rng_aug = np.random
+    patches = perturb_multiscale_new(img, sfs, default_augmentation_params, target_shapes=patch_sizes, rng=rng_aug)
+    test = skimage.transform.rotate(img, 120, order=3)
     plt.subplot(120),plt.imshow(img),plt.title('original')
     plt.subplot(121),plt.imshow(test),plt.title('simple rotation')
-    plt.subplot(122),plt.imshow(ainv),plt.title('sander')
+    plt.subplot(122),plt.imshow(patches),plt.title('sander')
 
 
 
