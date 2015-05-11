@@ -14,14 +14,15 @@ from datetime import datetime, timedelta
 import string
 from itertools import izip
 import matplotlib
+import tmp_dnn
 
 
 Conv2DLayer = tmp_dnn.Conv2DDNNLayer
 MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
 #real-time aug based on Sander Dielman's KDSB solution
 
-
-
+#create train/valid
+#
 maps = {'breedlove': 9,
  'dean': 11,
  'epiphone': 1,
@@ -44,6 +45,17 @@ maps = {'breedlove': 9,
  'yamaha': 7}
 
 
+default_augmentation_params = {
+    'zoom_range': (1 / 1.1, 1.1),
+    'rotation_range': (0, 360),
+    'shear_range': (0, 0),
+    'translation_range': (-4, 4),
+    'do_flip': False,
+    'allow_stretch': False,
+}
+sfs = [1.0]
+patch_sizes = [(200,200)]
+rng_aug = np.random
 
 #sander realtime gen
 def buffered_gen_mp(source_gen, buffer_size=2):
@@ -96,90 +108,104 @@ def buffered_gen_threaded(source_gen, buffer_size=2):
         yield data
 
 
-
 class ZMUV(object):
+    #no longer need this class
+    # been depricated
     #class to get zero mean unit inv for 
     def __init__(self):
         self.base_folder = os.getcwd()
+        self.files=os.listdir(self.base_folder+'/data/train')[1:]
+
+       #preconfigured_params these are from all 
+       self.zmuv_mean_0 = 185.73197962244899
+       self.zmuv_mean_1 = 158.2484511020408
+       self.zmuv_mean_2 = 175.58142089183673
+       self.zmuv_stds_0 = 91.093651722052741
+       self.zmuv_stds_1 = 94.983282488459835
+       self.zmuv_stds_2 = 95.677215726773767
 
     def estimate_params(self):
-        files = random.sample(self.files,15000)
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                            '/train/'+name+'/'+name+'.png')) for name in files])
-        xmatrix = xmatrix.reshape((15000, 3, 640, 640)) 
+        files = random.sample(self.files,8000)
+        pictures = [np.asarray(Image.open(self.base_folder+
+                    '/data/train/'+name+'/'+name+'.png')) for name in files]
+        
+        img.thumbnail((200,200), Image.ANTIALIAS)
 
-        self.zmuv_mean_0 = np.mean([x[0] for x in xmatrix])
-        self.zmuv_mean_1 = np.mean([x[1] for x in xmatrix])
-        self.zmuv_mean_2 = np.mean([x[2] for x in xmatrix])
-        self.zmuv_stds_0 = np.std([x[0] for x in xmatrix])
-        self.zmuv_stds_1 = np.std([x[1] for x in xmatrix])
-        self.zmuv_stds_2 = np.std([x[2] for x in xmatrix])
-        del(xmatrix)
+        self.xmatrix = np.zeros((8000,3,350,350))
+        for i in range(len(pictures)):
+            self.xmatrix[i] = pictures[i].reshape(3,350,350)
+        self.zmuv_mean_0 = np.mean([x[0] for x in self.xmatrix])
+        self.zmuv_mean_1 = np.mean([x[1] for x in self.xmatrix])
+        self.zmuv_mean_2 = np.mean([x[2] for x in self.xmatrix])
+        self.zmuv_stds_0 = np.std([x[0] for x in self.xmatrix])
+        self.zmuv_stds_1 = np.std([x[1] for x in self.xmatrix])
+        self.zmuv_stds_2 = np.std([x[2] for x in self.xmatrix])
+        del(self.xmatrix)
 
 
 class ValidData(object):
-    def __init__(self, base_path, zmuv, maps=maps):
-        self.zmuv = zmuv
+    """shrinks image size to something more manageable"""
+    def __init__(self, base_path=os.getcwd(), maps=maps):
         self.base_folder = base_path
-        self.files=os.listdir(self.base_folder)[1:]
+        self.files=os.listdir(self.base_folder+'/data/valid')[1:]
         self.mapping = maps
 
-    def create_test_matrix(self, files):
+    def create_matrix(self, files):
         #better way to do this. Has to be.
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                            '/valid/'+name+'/'+name+'.png')) for name in self.files])
+        pictures = [Image.open(self.base_folder+
+                    '/data/valid/'+name+'/'+name+'.png')) for name in self.files]]
+        pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
+        xmatrix = np.vstack([np.asarray(img) for img in pictures])
+        del(pictures)
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                            '/valid/'+name+'/label.txt').read()] for name in sef.files])
-        xmatrix = xmatrix.reshape((len(self.files), 3, 640, 640)) 
+                            '/data/valid/'+name+'/label.txt').read()] for name in sef.files])
+        xmatrix = xmatrix.reshape((len(self.files), 3, 350, 350)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
-        #TODO: add rotations and zooming.
 
         #apply ZMUV to batch
         for image in xmatrix:
-            image[0] -= self.zmuv.zmuv_mean_0
-            image[1] -= self.zmuv.zmuv_mean_1
-            image[2] -= self.zmuv.zmuv_mean_2
-            image[0] /= self.zmuv.zmuv_stds_0
-            image[1] /= self.zmuv.zmuv_stds_1
-            image[2] /= self.zmuv.zmuv_stds_2
-        return xmatrix,ymatrix
+            image[0] -= image[0].mean()
+            image[1] -= image[1].mean()
+            image[2] -= image[2].mean()
+            image[0] /= image[0].std()
+            image[1] /= image[1].std()
+            image[2] /= image[2].std()
+        return xmatrix, ymatrix
 
 
 
 class TestData(object):
-    def __init__(self, base_path, zmuv, maps=maps):
-        self.zmuv = zmuv
+    def __init__(self, base_path, maps=maps):
         self.base_folder = base_path
-        self.files=os.listdir(self.base_folder)[1:]
+        self.files=os.listdir(self.base_folder+'/data/test')[1:]
         self.mapping = maps
 
-    def create_test_matrix(self, files):
+    def create_matrix(self, files):
         #better way to do this. Has to be.
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                            '/test/'+name+'/'+name+'.png')) for name in self.files])
+        pictures = [Image.open(self.base_folder+
+                    '/data/test/'+name+'/'+name+'.png')) for name in self.files]]
+        pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
+        xmatrix = np.vstack([np.asarray(img) for img in pictures])
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                            '/test/'+name+'/label.txt').read()] for name in sef.files])
-        xmatrix = xmatrix.reshape((len(self.files), 3, 640, 640)) 
+                    '/data/test/'+name+'/label.txt').read()] for name in sef.files])
+        xmatrix = xmatrix.reshape((len(self.files), 3, 350, 350)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
-        #TODO: add rotations and zooming.
-
         #apply ZMUV to batch
         for image in xmatrix:
-            image[0] -= self.zmuv.zmuv_mean_0
-            image[1] -= self.zmuv.zmuv_mean_1
-            image[2] -= self.zmuv.zmuv_mean_2
-            image[0] /= self.zmuv.zmuv_stds_0
-            image[1] /= self.zmuv.zmuv_stds_1
-            image[2] /= self.zmuv.zmuv_stds_2
-        return xmatrix,ymatrix
+            image[0] -= image[0].mean()
+            image[1] -= image[1].mean()
+            image[2] -= image[2].mean()
+            image[0] /= image[0].std()
+            image[1] /= image[1].std()
+            image[2] /= image[2].std()
+        return xmatrix, ymatrix
 
 
 
 class TrainData(object):
     """  batch iterator """
-    def __init__(self, path, total_epochs, zmuv,
-                        mapping = maps, batch_size=128):
-        self.zmuv = zmuv
+    def __init__(self, path, total_epochs,
+                    mapping = maps, batch_size=128):
         self.batch_size = batch_size
         self.total_epochs = total_epochs
         self.mapping = mapping
@@ -202,22 +228,28 @@ class TrainData(object):
 
     def create_matrix(self, files):
         #add test time augmentation
-        xmatrix = np.vstack([np.asarray(Image.open(self.base_folder+
-                                '/'+name+'/'+name+'.png')) for name in files])
+        #load pics into mem from PIL
+        pictures = [np.asarray(Image.open(self.base_folder+
+                            '/'+name+'/'+name+'.png')) for name in files]
+        pictures = [perturb_multiscale_new(img, sfs, default_augmentation_params, 
+            target_shapes=patch_sizes, rng=rng_aug) for img in pictures]
+        xmatrix = np.vstack(pictures)
+        del(pictures)
+
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                                '/'+name+'/label.txt').read()] for name in files])
-        xmatrix = xmatrix.reshape((self.batch_size, 3, 640, 640)) 
+                            '/'+name+'/label.txt').read()] for name in files])
+        xmatrix = xmatrix.reshape((self.batch_size, 3, 200, 200)) 
         ymatrix = np.array(ymatrix,dtype = 'int32')
         #TODO: add rotations and zooming.
 
         #apply ZMUV to batch
         for image in xmatrix:
-            image[0] -= self.zmuv.zmuv_mean_0
-            image[1] -= self.zmuv.zmuv_mean_1
-            image[2] -= self.zmuv.zmuv_mean_2
-            image[0] /= self.zmuv.zmuv_stds_0
-            image[1] /= self.zmuv.zmuv_stds_1
-            image[2] /= self.zmuv.zmuv_stds_2
+            image[0] -= image[0].mean()
+            image[1] -= image[1].mean()
+            image[2] -= image[2].mean()
+            image[0] /= image[0].std()
+            image[1] /= image[1].std()
+            image[2] /= image[2].std()
         yield xmatrix,ymatrix
 
     def data_generator(self):
@@ -356,10 +388,7 @@ class Net(object):
 
 
         train_fn = self.nesterov_trainer() #nesterov with momentum.
-        nester
-        zmuv = ZMUV()
-        print 'getting Zero Mean Unit variance'
-        zmuv.estimate_params()
+
 
         train_set_iterator = TrainData(os.getcwd(), max_epochs ,zmuv=zmuv, train_test_or_valid='train')
         dev_set_iterator = ValidData(os.getcwd(), zmuv=zmuv ,train_test_or_valid='valid')
@@ -456,12 +485,3 @@ class Net(object):
                   
         if not verbose:
             print("")
-        #for i, param in enumerate(best_params):
-        #    self.params[i] = param
-
-
-
-
-
-
-
