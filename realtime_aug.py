@@ -63,6 +63,7 @@ def build_rescale_transform(downscale_factor, image_shape, target_shape):
     tform_shift_ds = skimage.transform.SimilarityTransform(translation=(shift_x, shift_y))
     return tform_shift_ds + tform_ds
 
+
 class Random_perturbation_transform(object):
     """ decided to put it in class to retain the randomly generated values"""
     def __init__(self, zoom_range, rotation_range, shear_range, translation_range, do_flip=False, allow_stretch=False, rng=np.random):
@@ -128,23 +129,23 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
     out[:,:,0] = output[0]
     out[:,:,1] = output[1]
     out[:,:,2] = output[2]
-    return np.invert(np.asarray(out,dtype='int8'))
+
+    return 255-np.asarray(out,dtype='float32')+1 #hacky code but works
+
+
+
+
+
 if __name__ == '__main__':
     from PIL import Image
     import matplotlib.pyplot as plt
-    img = np.asarray(Image.open('552231568382a5e57c4651db567cbc0e/552231568382a5e57c4651db567cbc0e.png'))
+    img = np.asarray(Image.open(os.getcwd()+'/data/train/09c25d76fc840b3a687b59d337e585f5/09c25d76fc840b3a687b59d337e585f5.png'))
     sfs = [1.0]
-    patch_sizes = ([500,500])
+    patch_sizes = [(200,200)]
     rng_aug = np.random
     patches = perturb_multiscale_new(img, sfs, default_augmentation_params, target_shapes=patch_sizes, rng=rng_aug)
     test = skimage.transform.rotate(img, 120, order=3)
     plt.subplot(120),plt.imshow(img),plt.title('original')
     plt.subplot(121),plt.imshow(test),plt.title('simple rotation')
     plt.subplot(122),plt.imshow(patches),plt.title('sander')
-
-
-
-
-
-
 
