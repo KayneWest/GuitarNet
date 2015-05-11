@@ -150,26 +150,29 @@ class ValidData(object):
         self.files=os.listdir(self.base_folder+'/data/valid')[1:]
         self.mapping = maps
 
-    def create_matrix(self, files):
+    def create_matrix(self,zmuv=True):
         #better way to do this. Has to be.
         pictures = [Image.open(self.base_folder+
                     '/data/valid/'+name+'/'+name+'.png') for name in self.files]
-        pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
+        #changes 'pictrues' in place
+        for img in pictures:
+            img.thumbnail((300,300), Image.ANTIALIAS)
         xmatrix = np.vstack([np.asarray(img) for img in pictures])
         del(pictures)
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                            '/data/valid/'+name+'/label.txt').read()] for name in sef.files])
-        xmatrix = xmatrix.reshape((len(self.files), 3, 350, 350)) 
+                            '/data/valid/'+name+'/label.txt').read()] for name in self.files])
+        xmatrix = xmatrix.reshape((len(self.files), 3, 300, 300)).astype('float32')
+        xmatrix = 255-xmatrix+1
         ymatrix = np.array(ymatrix,dtype = 'int32')
-
-        #apply ZMUV to batch
-        for image in xmatrix:
-            image[0] -= image[0].mean()
-            image[1] -= image[1].mean()
-            image[2] -= image[2].mean()
-            image[0] /= image[0].std()
-            image[1] /= image[1].std()
-            image[2] /= image[2].std()
+        if zmuv is True:
+            #apply ZMUV to batch
+            for image in xmatrix:
+                image[0] -= image[0].mean()
+                image[1] -= image[1].mean()
+                image[2] -= image[2].mean()
+                image[0] /= image[0].std()
+                image[1] /= image[1].std()
+                image[2] /= image[2].std()
         return xmatrix, ymatrix
 
 
@@ -180,24 +183,27 @@ class TestData(object):
         self.files=os.listdir(self.base_folder+'/data/test')[1:]
         self.mapping = maps
 
-    def create_matrix(self, files):
+    def create_matrix(self, zmuv=True):
         #better way to do this. Has to be.
         pictures = [Image.open(self.base_folder+
                     '/data/test/'+name+'/'+name+'.png') for name in self.files]
-        pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
+       #changes 'pictrues' in place
+        for img in pictures:
+            img.thumbnail((300,300), Image.ANTIALIAS)
         xmatrix = np.vstack([np.asarray(img) for img in pictures])
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
-                    '/data/test/'+name+'/label.txt').read()] for name in sef.files])
-        xmatrix = xmatrix.reshape((len(self.files), 3, 350, 350)) 
+                    '/data/test/'+name+'/label.txt').read()] for name in self.files])
+        xmatrix = xmatrix.reshape((len(self.files), 3, 300, 300)).astype('float32')
         ymatrix = np.array(ymatrix,dtype = 'int32')
-        #apply ZMUV to batch
-        for image in xmatrix:
-            image[0] -= image[0].mean()
-            image[1] -= image[1].mean()
-            image[2] -= image[2].mean()
-            image[0] /= image[0].std()
-            image[1] /= image[1].std()
-            image[2] /= image[2].std()
+        if zmuv is True:
+            #apply ZMUV to batch
+            for image in xmatrix:
+                image[0] -= image[0].mean()
+                image[1] -= image[1].mean()
+                image[2] -= image[2].mean()
+                image[0] /= image[0].std()
+                image[1] /= image[1].std()
+                image[2] /= image[2].std()
         return xmatrix, ymatrix
 
 
@@ -238,10 +244,8 @@ class TrainData(object):
 
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
                             '/'+name+'/label.txt').read()] for name in files])
-        xmatrix = xmatrix.reshape((self.batch_size, 3, 200, 200)) 
+        xmatrix = xmatrix.reshape((self.batch_size, 3, 300, 300)).astype('float32')
         ymatrix = np.array(ymatrix,dtype = 'int32')
-        #TODO: add rotations and zooming.
-
         #apply ZMUV to batch
         for image in xmatrix:
             image[0] -= image[0].mean()
