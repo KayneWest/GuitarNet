@@ -116,13 +116,13 @@ class ZMUV(object):
         self.base_folder = os.getcwd()
         self.files=os.listdir(self.base_folder+'/data/train')[1:]
 
-       #preconfigured_params these are from all 
-       self.zmuv_mean_0 = 185.73197962244899
-       self.zmuv_mean_1 = 158.2484511020408
-       self.zmuv_mean_2 = 175.58142089183673
-       self.zmuv_stds_0 = 91.093651722052741
-       self.zmuv_stds_1 = 94.983282488459835
-       self.zmuv_stds_2 = 95.677215726773767
+        #preconfigured_params these are from all 
+        self.zmuv_mean_0 = 185.73197962244899
+        self.zmuv_mean_1 = 158.2484511020408
+        self.zmuv_mean_2 = 175.58142089183673
+        self.zmuv_stds_0 = 91.093651722052741
+        self.zmuv_stds_1 = 94.983282488459835
+        self.zmuv_stds_2 = 95.677215726773767
 
     def estimate_params(self):
         files = random.sample(self.files,8000)
@@ -153,7 +153,7 @@ class ValidData(object):
     def create_matrix(self, files):
         #better way to do this. Has to be.
         pictures = [Image.open(self.base_folder+
-                    '/data/valid/'+name+'/'+name+'.png')) for name in self.files]]
+                    '/data/valid/'+name+'/'+name+'.png') for name in self.files]
         pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
         xmatrix = np.vstack([np.asarray(img) for img in pictures])
         del(pictures)
@@ -183,7 +183,7 @@ class TestData(object):
     def create_matrix(self, files):
         #better way to do this. Has to be.
         pictures = [Image.open(self.base_folder+
-                    '/data/test/'+name+'/'+name+'.png')) for name in self.files]]
+                    '/data/test/'+name+'/'+name+'.png') for name in self.files]
         pictures = [img.thumbnail((200,200), Image.ANTIALIAS) for img in pictures]
         xmatrix = np.vstack([np.asarray(img) for img in pictures])
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
@@ -272,14 +272,14 @@ class Net(object):
     """ VGG style net for guitar classification. 
         Using Sander's layers and initialization"""
     
-    def __init__(self, out = 20, ...):
-        self.output_dim = out
+    def __init__(self, classes = 20):
+        self.output_dim = classes
         self.batch_size = 128
         self.x = T.fmatrix('x')
         self.y = T.ivector('y')
 
         #layers
-        self.l_in = nn.layers.InputLayer(shape=(self.batch_size, 3, 640, 640))        
+        self.l_in = nn.layers.InputLayer(shape=(self.batch_size, 3, 200, 200))        
         self.C1 = Conv2DLayer(self.l_in, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
         self.C2 = Conv2DLayer(self.C1, num_filters=16, filter_size=(3, 3), border_mode="same",
@@ -331,7 +331,7 @@ class Net(object):
         learning_rate = T.fscalar('lr')
         #avg_cost = train_fn(x, y, lr=1.E-2)
         train_fn = theano.function(inputs=[theano.Param(batch_x),
-                                            theano.Param(batch_y)
+                                            theano.Param(batch_y),
                                             theano.Param(lr)],
                                outputs=self.loss,
                                updates=self.updates,
@@ -344,8 +344,7 @@ class Net(object):
         """ Returns functions to get current classification errors. """
         batch_x = T.fmatrix('batch_x')
         batch_y = T.ivector('batch_y')
-        score = theano.function(inputs=[theano.Param(batch_x),
-                                        theano.Param(batch_y)],
+        score = theano.function(inputs=[theano.Param(batch_x),theano.Param(batch_y)],
                                 outputs=self.errors,
                                 givens={self.x: batch_x, self.y: batch_y})
 
@@ -449,10 +448,8 @@ class Net(object):
                     print "Saving metadata, parameters"
 
                     with open(self.metadata_tmp_path, 'w') as f:
-                        pickle.dump({
-                            'losses_train': avg_costs,
-                            'param_values': nn.layers.get_all_param_values(self.objective) ,
-                        }, f, pickle.HIGHEST_PROTOCOL)
+                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.objective)},
+                                     f, pickle.HIGHEST_PROTOCOL)
 
 
             mean_costs = numpy.mean(avg_costs)
@@ -485,3 +482,10 @@ class Net(object):
                   
         if not verbose:
             print("")
+
+
+
+
+
+
+
