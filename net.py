@@ -106,6 +106,8 @@ def buffered_gen_threaded(source_gen, buffer_size=2):
 
     for data in iter(buffer.get, None):
         yield data
+
+
 class GenericData(object):
     """shrinks image size to something more manageable
        meant for test or valid data in current state"""
@@ -127,17 +129,16 @@ class GenericData(object):
         self.zmuv_std2 = np.std([image[:,:,2]for image in batch])
 
     def apply_zumv(self, image):
-        image = image
         if not self.zmuv_means0:
             raise NameError('zmuv_means0 not defined')
         else:
-            image[:,:,0]-self.zmuv_means0
-            image[:,:,0]-self.zmuv_means1
-            image[:,:,0]-self.zmuv_means2
+            image[:,:,0] = image[:,:,0]-self.zmuv_means0
+            image[:,:,1] = image[:,:,1]-self.zmuv_means1
+            image[:,:,2] = image[:,:,2]-self.zmuv_means2
 
-            image[:,:,0]/self.zmuv_std0
-            image[:,:,1]/self.zmuv_std1
-            image[:,:,2]/self.zmuv_std2
+            image[:,:,0] = image[:,:,0]/self.zmuv_std0
+            image[:,:,1] = image[:,:,1]/self.zmuv_std1
+            image[:,:,2] = image[:,:,2]/self.zmuv_std2
             return image
 
     def create_batch_matrix(self,zmuv=True):
@@ -148,7 +149,10 @@ class GenericData(object):
         for img in pictures:
             img.thumbnail((self.dims[0],self.dims[1]), Image.ANTIALIAS)
 
-        pictures = [np.asarray(img) for img in pictures]
+        #255 - image  produces strange issues with actual image, and thumbnail is inverting the image. 
+        #256 is used instead. 
+        #TODO change eventually
+        pictures = [256 - np.asarray(img) for img in pictures]
         self.estimate_zmuv_batch(pictures)
         #changing to the current way, vstack+reshape was causing strange issues
         pictures = [apply_zumv(img) for img in pictures]
@@ -160,8 +164,6 @@ class GenericData(object):
         ymatrix = np.hstack([self.mapping[open(self.base_folder+
                 '/data/'+self.test_train_valid+'/'+name+'/label.txt').read()] for name in self.files])
         xmatrix = xmatrix.reshape((len(self.files), self.dims[2], self.dims[0], self.dims[1]))#.astype('float32')
-        #hacky inversion, but it works:
-        xmatrix = 255-xmatrix#+1
         ymatrix = np.array(ymatrix,dtype = 'int32')
         return xmatrix,ymatrix
 
