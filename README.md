@@ -8,3 +8,5 @@ Here are some good resources for CUDA:
     
     http://www.r-tutor.com/gpu-computing/cuda-installation/cuda7.0-ubuntu
     http://askubuntu.com/questions/451672/installing-and-testing-cuda-in-ubuntu-14-04
+    https://groups.google.com/forum/#!msg/theano-users/xW9jmHzOwp0/8SvMA_R0EAUJ
+    https://github.com/Theano/libgpuarray/issues/19
