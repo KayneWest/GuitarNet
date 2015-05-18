@@ -13,7 +13,6 @@ import cPickle as pickle
 from datetime import datetime, timedelta
 import string
 from itertools import izip, repeat, chain
-import matplotlib
 import tmp_dnn
 from collections import defaultdict
 import random
