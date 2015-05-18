@@ -22,8 +22,7 @@ import numpy
 import theano
 
 
-
-
+# define params and other errata
 maps = {'breedlove': 8,
  'dean': 10,
  'epiphone': 0,
@@ -45,15 +44,13 @@ maps = {'breedlove': 8,
  'washburn': 18,
  'yamaha': 6}
 
-
+############################################
+### Sander defined methods - Start
+############################################
 
 Conv2DLayer = tmp_dnn.Conv2DDNNLayer
 MaxPool2DLayer = tmp_dnn.MaxPool2DDNNLayer
 #real-time aug based on Sander Dielman's KDSB solution
-
-#create train/valid
-#
-
 
 default_augmentation_params = {
     'zoom_range': (1 / 1.1, 1.1),
@@ -67,17 +64,10 @@ sfs = [1.0]
 patch_sizes = [(200,200)]
 rng_aug = np.random
 
-
-
-
-
-#sander realtime gen
-
 def one_hot(vec, m=20):
     if m is None:
         m = int(np.max(vec)) + 1
     return np.eye(m)[vec]
-
 
 def buffered_gen_mp(source_gen, buffer_size=2):
     """
@@ -128,6 +118,9 @@ def buffered_gen_threaded(source_gen, buffer_size=2):
     for data in iter(buffer.get, None):
         yield data
 
+############################################
+### Sander defined methods - End
+############################################
 
 
 
@@ -140,7 +133,8 @@ class DataLoader(object):
         self.dims = (300, 300, 3)
         self.test_train_valid = train_test_valid
         try:
-            self.files=os.listdir(self.base_folder+'/data/'+self.test_train_valid)[1:]
+            self.files=os.listdir(self.base_folder+'/data/'+self.test_train_valid)
+            self.files = [x for x in self.files if x!='.DS_Store']
         except:
             raise OSError("You're not in the homefolder, big dog.")
             os.chdir(self.base_folder)
@@ -195,7 +189,7 @@ class DataLoader(object):
 
 
         xmatrix = xmatrix.reshape((len(files), self.dims[2], self.dims[0], self.dims[1]))#.astype('float32')
-        ymatrix = np.array(ymatrix,dtype = 'int32')
+        ymatrix = np.array(ymatrix,dtype = 'float32')
         return xmatrix, ymatrix
 
     def build_unequal_samples_map(self, total_epochs=5000): # , batch_size = 128
@@ -271,11 +265,12 @@ class DataLoader(object):
         self.build_unequal_samples_map()
         for batch in self.batchmap.values():
             yield self.create_batch_matrix(batch)
-            
-            
+
+
+
 class Net(object):
 
-    """ VGG style net for guitar classification. 
+    """ 'VGG-ish' style net for guitar classification. 
         Using Sander's layers and initialization"""
     
     def __init__(self, classes = 20):
@@ -285,25 +280,25 @@ class Net(object):
         #layers
         self.l_in = nn.layers.InputLayer(shape=(self.batch_size, 3, 300, 300))
 
-        self.C1 = nn.layers.Conv2DLayer(self.l_in, num_filters=32, filter_size=(3, 3), border_mode="same",
+        self.C1 = Conv2DLayer(self.l_in, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.C2 = nn.layers.Conv2DLayer(self.C1, num_filters=16, filter_size=(3, 3), border_mode="same",
+        self.C2 = Conv2DLayer(self.C1, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.M1 = nn.layers.pool.MaxPool2DLayer(self.C2, pool_size=3, stride=2)
+        self.M1 = MaxPool2DLayer(self.C2, ds=(3, 3), strides=(2, 2))
         self.D1 = nn.layers.DropoutLayer(self.M1, p=0.5)
 
-        self.C3 = nn.layers.Conv2DLayer(self.D1, num_filters=32, filter_size=(3, 3), border_mode="same",
+        self.C3 = Conv2DLayer(self.D1, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.C4 = nn.layers.Conv2DLayer(self.C3, num_filters=16, filter_size=(3, 3), border_mode="same",
+        self.C4 = Conv2DLayer(self.C3, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.M2 = nn.layers.pool.MaxPool2DLayer(self.C4, pool_size=3, stride=2)
+        self.M2 = MaxPool2DLayer(self.C4, ds=(3, 3), strides=(2, 2))
         self.D2 = nn.layers.DropoutLayer(self.M2, p=0.5)
 
-        self.C5 = nn.layers.Conv2DLayer(self.D2, num_filters=32, filter_size=(3, 3), border_mode="same",
+        self.C5 = Conv2DLayer(self.D2, num_filters=32, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.C6 = nn.layers.Conv2DLayer(self.C5, num_filters=16, filter_size=(3, 3), border_mode="same",
+        self.C6 = Conv2DLayer(self.C5, num_filters=16, filter_size=(3, 3), border_mode="same",
              W=nn_plankton.Conv2DOrthogonal(1.0), b=nn.init.Constant(0.1), nonlinearity=nn_plankton.leaky_relu)
-        self.M3 = nn.layers.pool.MaxPool2DLayer(self.C6, pool_size=3, stride=2)
+        self.M3 = MaxPool2DLayer(self.C6, ds=(3, 3), strides=(2, 2))
         self.D3 = nn.layers.DropoutLayer(self.M3, p=0.5)
 
         self.FC1 = nn.layers.DenseLayer(self.D3, num_units=256, W=nn_plankton.Orthogonal(1.0),
@@ -329,8 +324,8 @@ class Net(object):
 
 
     def nesterov_trainer(self):
-        batch_x = T.dtensor4('batch_x')
-        batch_y = T.dmatrix('batch_y')
+        batch_x = T.ftensor4('batch_x')
+        batch_y = T.fmatrix('batch_y')
         train_fn = theano.function(inputs=[theano.Param(batch_x),
                                             theano.Param(batch_y),
                                             ],
@@ -343,8 +338,8 @@ class Net(object):
 
     def score_classif(self, given_set):
         """ Returns functions to get current classification errors. """
-        batch_x = T.dtensor4('batch_x')
-        batch_y = T.dmatrix('batch_y')
+        batch_x = T.ftensor4('batch_x')
+        batch_y = T.fmatrix('batch_y')
         score = theano.function(inputs=[theano.Param(batch_x),theano.Param(batch_y)],
                                 outputs=self.errors,
                                 givens={self.l_in.input_var: batch_x, self.objective.target_var: batch_y})
@@ -357,7 +352,7 @@ class Net(object):
 
 
     def predict_(self, given_set):
-        batch_x = T.dtensor4('batch_x')
+        batch_x = T.ftensor4('batch_x')
         pred = theano.function(inputs=[theano.Param(batch_x)],
                                 outputs=self.pred,
                                 givens={self.l_in.input_var: batch_x})
@@ -367,7 +362,7 @@ class Net(object):
 
 
     def predict_proba_(self, given_set):
-        batch_x = T.dtensor4('batch_x')
+        batch_x = T.ftensor4('batch_x')
         pred_prob = theano.function(inputs=[theano.Param(batch_x)],
                                 outputs=self.probs,
                                 givens={self.l_in.input_var: batch_x})
@@ -428,19 +423,11 @@ class Net(object):
                     print "  setting learning rate to %.7f" % lr
                     self.learning_rate.set_value(lr)
 
-                #print "  load training data onto GPU"
-                #for x_shared, x_chunk in zip(xs_shared, xs_chunk):
-                #    x_shared.set_value(x_chunk)
-                #y_shared.set_value(y_chunk)                
-
-                #call the training function
+                print "  load training data onto GPU"
                 avg_cost = train_fn(x, y)
                 if np.isnan(avg_cost):
                     raise RuntimeError("NaN DETECTED.")
                 
-                #reset it?
-                #xs_shared = [nn.utils.shared_empty(dim=ndim) for ndim in input_ndims]
-                #y_shared = nn.utils.shared_empty(dim=2)
                 if type(avg_cost) == list:
                     avg_costs.append(avg_cost[0])
                 else:
@@ -487,12 +474,7 @@ class Net(object):
             print("")
 
 
+
 if __name__ == '__main__':
     net = Net()
     net.train()
-
-            
-            
-            
-            
-            
