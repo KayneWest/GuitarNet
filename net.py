@@ -371,8 +371,7 @@ class Net(object):
 
     #TODO a lot
     def train(self, learning_schedule = {0: 0.0015, 700: 0.00015,  800: 0.000015}, 
-                momentum = 0.9, max_epochs=3000, early_stopping=True, verbose = True,
-                save_every = 20, save_path = os.getcwd()):
+                momentum = 0.9, max_epochs=3000, save_every = 20, save_path = os.getcwd()):
 
         self.save_every = save_every
         self.metadata_tmp_path = save_path
@@ -380,47 +379,42 @@ class Net(object):
         self.learning_rate = theano.shared(np.float32(self.learning_rate_schedule[0]))
         self.momentum = momentum
 
-
-
-        self.momentum = 0
+        #for trainer
         self.updates = nn.updates.nesterov_momentum(self.loss, self.all_params, self.learning_rate, self.momentum)
 
 
         train_fn = self.nesterov_trainer() #nesterov with momentum.
         train_set_iterator = DataLoader(os.getcwd(),train_test_valid='train')
-        dev_set_iterator = DataLoader(os.getcwd(), train_test_valid='valid')
-        train_scoref = self.score_classif(train_set_iterator)
-        dev_scoref = self.score_classif(dev_set_iterator)
         best_dev_loss = numpy.inf
         
         #for loading the data onto the gpu
-        create_train_gen = lambda: train_set_iterator.create_gen(max_epochs)
+        #create_train_gen = lambda: train_set_iterator.create_gen(max_epochs)
 
         patience = 1000  
         patience_increase = 2.
         improvement_threshold = 0.995
         done_looping = False
         print '... training the model'
-        test_score = 0.
         start_time = time.clock()
         epoch = 0
         timer = None
 
+        #for plotting
+        self._costs = []
+        self._train_errors = []
+        self._dev_errors = []
+
         while (epoch < max_epochs) and (not done_looping):
-            zeros = []
-            trainzeros= []
             epoch += 1
-            if not verbose:
-                sys.stdout.write("\r%0.2f%%" % (epoch * 100./ max_epochs))
-                sys.stdout.flush()
+            losses_train = []
             avg_costs = []
             timer = time.time()
-            for iteration, (x, y) in enumerate(create_train_gen()):
+            for iteration, (x, y) in enumerate(train_set_iterator):
 
-                if iteration in self.learning_rate_schedule:
-                    lr = np.float32(self.learning_rate_schedule[iteration])
+                if iteration in learning_rate_schedule:
+                    lr = np.float32(learning_rate_schedule[iteration])
                     print "  setting learning rate to %.7f" % lr
-                    self.learning_rate.set_value(lr)
+                    learning_rate.set_value(lr)
 
                 print "  load training data onto GPU"
                 avg_cost = train_fn(x, y)
@@ -433,44 +427,62 @@ class Net(object):
                     avg_costs.append(avg_cost)
             
                 #for saving the batch
-                if ((iteration + 1) % self.save_every) == 0:
+                if ((iteration + 1) % save_every) == 0:
                     print
                     print "Saving metadata, parameters"
 
-                    with open(self.metadata_tmp_path, 'w') as f:
-                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.objective)},
+                    with open(metadata_tmp_path, 'w') as f:
+                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(objective)},
                                      f, pickle.HIGHEST_PROTOCOL)
 
-            mean_costs = numpy.mean(avg_costs)
-            mean_train_errors = numpy.mean(train_scoref())
+                mean_train_loss = numpy.mean(avg_costs)
+                print "  mean training loss:\t\t%.6f" % mean_train_loss
+                losses_train.append(mean_train_loss)
 
-            print('  epoch %i took %f seconds' %
-                (epoch, time.time() - timer))
-            print('  epoch %i, avg costs %f' %
-                (epoch, mean_costs))
-            print('  epoch %i, training error %f' %
-                (epoch, mean_train_errors))
-            if plot:
-                self._costs.append(mean_costs)
-                self._train_errors.append(mean_train_errors)
+                #accuracy assessment
+                output = utils.one_hot(predict_(x)())
+                train_loss = utils.log_loss(output, y)
+                acc = accuracy(output, y)
+                losses.append(train_loss)
+                del output
+                del x
+                del y
 
-            dev_errors = numpy.mean(dev_scoref())
+                print('  epoch %i took %f seconds' %
+                    (epoch, time.time() - timer))
+                print('  epoch %i, avg costs %f' %
+                    (epoch, mean_train_loss))
+                print('  epoch %i, training error %f' %
+                    (epoch, acc))
 
-            if dev_errors < best_dev_loss:
-                best_dev_loss = dev_errors
-                best_params = copy.deepcopy(self.all_params)
-                if verbose:
+                #for plotting
+                self._costs.append(mean_train_loss)
+                self._train_errors.append(acc)
+                
+
+                #dev_errors = numpy.mean(dev_scoref())
+                #valid accuracy
+                dev_set_iterator = DataLoader(os.getcwd(), train_test_valid='valid')
+                #too many open files
+                xd,yd = dev_set_iterator.create_batch_matrix(random.sample(dev_set_iterator.files,128))
+                
+                valid_output = utils.one_hot(predict_(xd)())
+                valid_acc = utils.accuracy(valid_test, yd)
+                self._dev_errors.append(valid_acc)
+                del x
+                del y 
+
+                if valid_acc < best_dev_loss:
+                    best_dev_loss = valid_acc
+                    best_params = copy.deepcopy(all_params)
                     print('!!!  epoch %i, validation error of best model %f' %
-                        (epoch, dev_errors))
-                if (dev_errors < best_dev_loss *
-                    improvement_threshold):
-                    patience = max(patience, iteration * patience_increase)
-                if patience <= iteration:
-                    done_looping = True
-                    break
-                  
-        if not verbose:
-            print("")
+                        (epoch, valid_acc))
+                    if (valid_acc < best_dev_loss *
+                        improvement_threshold):
+                        patience = max(patience, iteration * patience_increase)
+                    if patience <= iteration:
+                        done_looping = True
+                        break
 
 
 
