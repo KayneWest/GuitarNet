@@ -19,6 +19,7 @@ import random
 from PIL import Image
 import numpy
 import theano
+import utils
 
 
 # define params and other errata
