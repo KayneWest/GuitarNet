@@ -20,7 +20,7 @@ from PIL import Image
 import numpy
 import theano
 import utils
-
+import copy
 
 # define params and other errata
 maps = {'breedlove': 8,
