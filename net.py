@@ -173,7 +173,7 @@ class DataLoader(object):
         # 255 - image  produces strange issues with actual image, and thumbnail is inverting the image. 
         # 256 is used instead. 
         # TODO change eventually
-        pictures = [256 - np.asarray(img) for img in pictures]
+        pictures = [256 - np.asarray(img).astype('float32') for img in pictures]
         self.estimate_zmuv_batch(pictures)
         # changing to the current way, vstack+reshape was causing strange issues
         pictures = [self.apply_zumv(img) for img in pictures]
