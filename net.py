@@ -433,7 +433,7 @@ class Net(object):
                     print "Saving metadata, parameters"
 
                     with open(metadata_tmp_path, 'w') as f:
-                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(objective)},
+                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.objective)},
                                      f, pickle.HIGHEST_PROTOCOL)
 
                 mean_train_loss = numpy.mean(avg_costs)
