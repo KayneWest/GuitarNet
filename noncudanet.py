@@ -361,7 +361,7 @@ class Net(object):
         return predict_probf
 
     #TODO a lot
-    def train(self, learning_schedule = {0: 0.0015, 700: 0.00015,  800: 0.000015}, 
+    def train(self, learning_schedule = {0: 0.015, 500: 0.0015,  800: 0.00015, 1000: 0.000015}, 
                 momentum = 0.9, max_epochs=3000, save_every = 20, save_path = os.getcwd()):
 
         self.save_every = save_every
@@ -377,6 +377,8 @@ class Net(object):
         train_fn = self.nesterov_trainer() #nesterov with momentum.
         train_set_iterator = DataLoader(os.getcwd(),train_test_valid='train')
         best_dev_loss = numpy.inf
+        dev_set_iterator = DataLoader(os.getcwd(), train_test_valid='valid')
+        dev_set_iterator.build_unequal_samples_map()
         
         #for loading the data onto the gpu
         #create_train_gen = lambda: train_set_iterator.create_gen(max_epochs)
@@ -423,7 +425,7 @@ class Net(object):
                     print
                     print "Saving metadata, parameters"
 
-                    with open(metadata_tmp_path, 'w') as f:
+                    with open(self.metadata_tmp_path, 'w') as f:
                         pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.output_layer)},
                                      f, pickle.HIGHEST_PROTOCOL)
 
@@ -432,9 +434,9 @@ class Net(object):
                 #losses_train.append(mean_train_loss)
 
                 #accuracy assessment
-                output = utils.one_hot(predict_(x)())
+                output = utils.one_hot(self.predict_(x)(),m=20)
                 train_loss = utils.log_loss(output, y)
-                acc = 1 - accuracy(output, y)
+                acc = 1 - utils.accuracy(output, y)
                 losses.append(train_loss)
                 del output
                 del x
@@ -451,27 +453,24 @@ class Net(object):
                 self._costs.append(mean_train_loss)
                 self._train_errors.append(acc)
                 
-
-                #dev_errors = numpy.mean(dev_scoref())
                 #valid accuracy
-                dev_set_iterator = DataLoader(os.getcwd(), train_test_valid='valid')
-                #too many open files
-                xd,yd = dev_set_iterator.create_batch_matrix(random.sample(dev_set_iterator.files,128))
-                
-                valid_output = utils.one_hot(predict_(xd)())
-                valid_acc = 1 - utils.accuracy(valid_test, yd)
+                xd,yd = dev_set_iterator.random_batch()
+
+                valid_output = utils.one_hot(self.predict_(xd)(),m=20)
+                valid_acc = 1 - utils.accuracy(valid_output, yd)
                 self._dev_errors.append(valid_acc)
-                del x
-                del y 
+                del valid_output
+                del xd
+                del yd
 
                 if valid_acc < best_dev_loss:
                     best_dev_loss = valid_acc
-                    best_params = copy.deepcopy(all_params)
+                    best_params = copy.deepcopy(self.all_params )
                     print('!!!  epoch %i, validation error of best model %f' %
                         (epoch, valid_acc))
                     print
                     print "Saving best performance parameters"
-                    with open(metadata_tmp_path, 'w') as f:
+                    with open(self.metadata_tmp_path, 'w') as f:
                         pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.output_layer)},
                                      f, pickle.HIGHEST_PROTOCOL)
                     if (valid_acc < best_dev_loss *
@@ -485,7 +484,6 @@ class Net(object):
 if __name__ == '__main__':
     net = Net()
     net.train()
-
-
-
+    with open('saved_net.pkl', 'w') as f:
+        pickle.dump(net,f,pickle.HIGHEST_PROTOCOL)
 
