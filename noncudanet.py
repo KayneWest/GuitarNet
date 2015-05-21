@@ -21,6 +21,7 @@ import numpy
 import theano
 import utils
 import copy
+
 # define params and other errata
 maps = {'breedlove': 8,
  'dean': 10,
@@ -401,10 +402,10 @@ class Net(object):
             timer = time.time()
             for iteration, (x, y) in enumerate(train_set_iterator):
 
-                if iteration in learning_rate_schedule:
-                    lr = np.float32(learning_rate_schedule[iteration])
+                if iteration in self.learning_rate_schedule:
+                    lr = np.float32(self.learning_rate_schedule[iteration])
                     print "  setting learning rate to %.7f" % lr
-                    learning_rate.set_value(lr)
+                    self.learning_rate.set_value(lr)
 
 
                 print "  load training data onto GPU"
