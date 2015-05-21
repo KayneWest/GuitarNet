@@ -130,7 +130,7 @@ class DataLoader(object):
     # TODO - DRY
     def __init__(self, base_path=os.getcwd(), mapping = maps, train_test_valid='train'):
         self.base_folder = base_path
-        self.dims = (300, 300, 3)
+        self.dims = (100, 100, 3)
         self.test_train_valid = train_test_valid
         try:
             self.files=os.listdir(self.base_folder+'/data/'+self.test_train_valid)
@@ -142,13 +142,15 @@ class DataLoader(object):
 
     def estimate_zmuv_batch(self, batch):
         # clump RGB values separately
-        self.zmuv_means0 = np.mean([image[:,:,0]for image in batch])
-        self.zmuv_means1 = np.mean([image[:,:,1]for image in batch])
-        self.zmuv_means2 = np.mean([image[:,:,2]for image in batch])
+        self.zmuv_means0 = np.mean([image[:,:,0] for image in batch])
+        self.zmuv_means1 = np.mean([image[:,:,1] for image in batch])
+        self.zmuv_means2 = np.mean([image[:,:,2] for image in batch])
         self.zmuv_std0 = np.std([image[:,:,0]for image in batch])
         self.zmuv_std1 = np.std([image[:,:,1]for image in batch])
         self.zmuv_std2 = np.std([image[:,:,2]for image in batch])
 
+
+    #i dont think these are workin
     def apply_zumv(self, image):
         if not self.zmuv_means0:
             raise NameError('zmuv_means0 not defined')
@@ -193,14 +195,14 @@ class DataLoader(object):
         return xmatrix, ymatrix
 
     def build_unequal_samples_map(self, total_epochs=5000): # , batch_size = 128
-        if self.test_train_valid!='train':
-            raise NotImplementedError("function not implemented this data type")
+        #if self.test_train_valid!='train':
+        #    raise NotImplementedError("function not implemented this data type")
         # need this method because there's something like 7000 fenders, and 
         # next highest is 1000, then 400, then drops. 
         from copy import deepcopy
         #build data maps
         self.sample_map = defaultdict( list )
-        data_folder = self.base_folder+'/data/train'
+        data_folder = self.base_folder+'/data/'+self.test_train_valid
         os.chdir(data_folder)
         for f in self.files:
             os.chdir(data_folder)
@@ -265,6 +267,12 @@ class DataLoader(object):
         self.build_unequal_samples_map()
         for batch in self.batchmap.values():
             yield self.create_batch_matrix(batch)
+
+    def random_batch(self):
+        if not self.batchmap:
+            raise NotImplementedError("need to declare the batchmap first")
+        batch = random.choice(self.batchmap.values())
+        return self.create_batch_matrix(batch)
 
 
 
@@ -370,12 +378,11 @@ class Net(object):
             return pred_prob(given_set)
         return predict_probf
 
-    #TODO a lot
     def train(self, learning_schedule = {0: 0.0015, 700: 0.00015,  800: 0.000015}, 
                 momentum = 0.9, max_epochs=3000, save_every = 20, save_path = os.getcwd()):
 
         self.save_every = save_every
-        self.metadata_tmp_path = save_path
+        self.metadata_tmp_path = save_path+"/model_params.pkl"
         self.learning_rate_schedule = learning_schedule
         self.learning_rate = theano.shared(np.float32(self.learning_rate_schedule[0]))
         self.momentum = momentum
@@ -406,8 +413,8 @@ class Net(object):
         self._dev_errors = []
 
         while (epoch < max_epochs) and (not done_looping):
-            epoch += 1
             losses_train = []
+            losses = []
             avg_costs = []
             timer = time.time()
             for iteration, (x, y) in enumerate(train_set_iterator):
@@ -416,6 +423,7 @@ class Net(object):
                     lr = np.float32(learning_rate_schedule[iteration])
                     print "  setting learning rate to %.7f" % lr
                     learning_rate.set_value(lr)
+
 
                 print "  load training data onto GPU"
                 avg_cost = train_fn(x, y)
@@ -433,17 +441,17 @@ class Net(object):
                     print "Saving metadata, parameters"
 
                     with open(metadata_tmp_path, 'w') as f:
-                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.objective)},
+                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.output_layer)},
                                      f, pickle.HIGHEST_PROTOCOL)
 
                 mean_train_loss = numpy.mean(avg_costs)
-                print "  mean training loss:\t\t%.6f" % mean_train_loss
-                losses_train.append(mean_train_loss)
+                #print "  mean training loss:\t\t%.6f" % mean_train_loss
+                #losses_train.append(mean_train_loss)
 
                 #accuracy assessment
                 output = utils.one_hot(predict_(x)())
                 train_loss = utils.log_loss(output, y)
-                acc = accuracy(output, y)
+                acc = 1 - accuracy(output, y)
                 losses.append(train_loss)
                 del output
                 del x
@@ -468,7 +476,7 @@ class Net(object):
                 xd,yd = dev_set_iterator.create_batch_matrix(random.sample(dev_set_iterator.files,128))
                 
                 valid_output = utils.one_hot(predict_(xd)())
-                valid_acc = utils.accuracy(valid_test, yd)
+                valid_acc = 1 - utils.accuracy(valid_test, yd)
                 self._dev_errors.append(valid_acc)
                 del x
                 del y 
@@ -478,12 +486,18 @@ class Net(object):
                     best_params = copy.deepcopy(all_params)
                     print('!!!  epoch %i, validation error of best model %f' %
                         (epoch, valid_acc))
+                    print
+                    print "Saving best performance parameters"
+                    with open(metadata_tmp_path, 'w') as f:
+                        pickle.dump({'losses_train': avg_costs,'param_values': nn.layers.get_all_param_values(self.output_layer)},
+                                     f, pickle.HIGHEST_PROTOCOL)
                     if (valid_acc < best_dev_loss *
                         improvement_threshold):
                         patience = max(patience, iteration * patience_increase)
                     if patience <= iteration:
                         done_looping = True
                         break
+                epoch += 1
 
 
 
