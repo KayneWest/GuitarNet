@@ -100,7 +100,7 @@ class Random_perturbation_transform(object):
 
 
 #not working properly. colors are not meshing well
-def perturb_multiscale_new(img, scale_factors=[1.0], augmentation_params, target_shapes=[(200,200)], rng=np.random):
+def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shapes=[(200,200)], rng=np.random):
     """
     scale is a DOWNSCALING factor.
     """
