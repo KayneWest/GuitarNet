@@ -22,6 +22,7 @@ import theano
 import utils
 import copy
 import realtime_aug
+import skimage
 
 # define params and other errata
 maps = {'breedlove': 8,
