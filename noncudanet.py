@@ -187,7 +187,7 @@ class DataLoader(object):
         for img in pictures:
             img.thumbnail((self.dims[0],self.dims[1]), Image.ANTIALIAS)
         pictures = [skimage.img_as_float(img).astype('float32') for img in pictures]
-        #patches = perturb_multiscale_new(img, sfs, default_augmentation_params, target_shapes=patch_sizes, rng=rng_aug)
+        # find ZMUV parameters
         self.estimate_zmuv_batch(pictures)
         # changing to the current way, vstack+reshape was causing strange issues
         pictures = [self.realtime_augmentation(img) for img in pictures]
