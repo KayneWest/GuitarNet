@@ -164,6 +164,21 @@ class DataLoader(object):
             image[:,:,2] = image[:,:,2]/self.zmuv_std2
             return image
 
+    def realtime_augmentation(self, img):
+        default_augmentation_params = {
+            'zoom_range': (1 / 1.1, 1.1),
+            'rotation_range': (0, 360),
+            'shear_range': (0, 0),
+            'translation_range': (-4, 4),
+            'do_flip': False,
+            'allow_stretch': False,
+        }
+        sfs = [1.0]
+        patch_sizes = [(100,100)]
+        rng_aug = np.random
+        return realtime_aug.perturb_multiscale_new(img, [1.0], default_augmentation_params,
+                     target_shapes=patch_sizes, rng=rng_aug)
+
     def create_batch_matrix(self, files):
         # better way to do this. Has to be.
         pictures = [Image.open(self.base_folder+
@@ -171,13 +186,11 @@ class DataLoader(object):
         #downscales the image so that the total size is (300,300,3).
         for img in pictures:
             img.thumbnail((self.dims[0],self.dims[1]), Image.ANTIALIAS)
-
-        # 255 - image  produces strange issues with actual image, and thumbnail is inverting the image. 
-        # 256 is used instead. 
-        # TODO change eventually
-        pictures = [256 - np.asarray(img).astype('float32') for img in pictures]
+        pictures = [skimage.img_as_float(img).astype('float32') for img in pictures]
+        #patches = perturb_multiscale_new(img, sfs, default_augmentation_params, target_shapes=patch_sizes, rng=rng_aug)
         self.estimate_zmuv_batch(pictures)
         # changing to the current way, vstack+reshape was causing strange issues
+        pictures = [self.realtime_augmentation(img) for img in pictures]
         pictures = [self.apply_zumv(img) for img in pictures]
         # float32 adds time to creation
         xmatrix = np.zeros( (len(files),self.dims[0],self.dims[1],self.dims[2]) ).astype('float32')
@@ -189,12 +202,13 @@ class DataLoader(object):
         ymatrix = np.vstack([one_hot(self.mapping[open(self.base_folder+
                 '/data/'+self.test_train_valid+'/'+name+'/label.txt').read()])  for name in files])
 
-
         xmatrix = xmatrix.reshape((len(files), self.dims[2], self.dims[0], self.dims[1]))#.astype('float32')
         ymatrix = np.array(ymatrix,dtype = 'float32')
         return xmatrix, ymatrix
 
     def build_unequal_samples_map(self, total_epochs=5000): # , batch_size = 128
+        #if self.test_train_valid!='train':
+        #    raise NotImplementedError("function not implemented this data type")
         # need this method because there's something like 7000 fenders, and 
         # next highest is 1000, then 400, then drops. 
         from copy import deepcopy
@@ -271,6 +285,7 @@ class DataLoader(object):
             raise NotImplementedError("need to declare the batchmap first")
         batch = random.choice(self.batchmap.values())
         return self.create_batch_matrix(batch)
+
 
 
 
