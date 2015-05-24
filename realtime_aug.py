@@ -129,7 +129,7 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
             output.append(fast_warp(channel, tform_rescale + tform_augment, output_shape=target_shape, mode='constant'))#.astype('float32'))
     
 
-    out = np.zeros((patch_sizes[0][0], patch_sizes[0][1], 3),dtype='float32')
+    out = np.zeros((target_shapes[0][0], target_shapes[0][1], 3),dtype='float32')
     out[:,:,0] = output[0]
     out[:,:,1] = output[1]
     out[:,:,2] = output[2]
