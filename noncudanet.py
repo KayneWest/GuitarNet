@@ -21,6 +21,7 @@ import numpy
 import theano
 import utils
 import copy
+import realtime_aug
 
 # define params and other errata
 maps = {'breedlove': 8,
