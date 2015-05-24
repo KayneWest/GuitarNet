@@ -32,6 +32,8 @@ def fast_warp(img, tf, output_shape=(50, 50), mode='constant', order=1):
     This wrapper function is faster than skimage.transform.warp
     """
     m = tf.params # tf._matrix is
+    # fastwarp seems to corrupt image using int8 transforms
+    # TODO further research here
     return skimage.transform._warps_cy._warp_fast(img, m, output_shape=output_shape, mode=mode, order=order)
 
 
@@ -98,7 +100,7 @@ class Random_perturbation_transform(object):
 
 
 #not working properly. colors are not meshing well
-def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shapes, rng=np.random):
+def perturb_multiscale_new(img, scale_factors=[1.0], augmentation_params, target_shapes=[(200,200)], rng=np.random):
     """
     scale is a DOWNSCALING factor.
     """
@@ -123,14 +125,15 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
                 tform_rescale = scale
             else:
                 tform_rescale = build_rescale_transform(scale, channel.shape, target_shape) # also does centering
+            #the reason this fucks up is due 
             output.append(fast_warp(channel, tform_rescale + tform_augment, output_shape=target_shape, mode='constant'))#.astype('float32'))
     
-    out = np.zeros((patch_sizes[0][0], patch_sizes[0][1], 3))
+
+    out = np.zeros((patch_sizes[0][0], patch_sizes[0][1], 3),dtype='float32')
     out[:,:,0] = output[0]
     out[:,:,1] = output[1]
     out[:,:,2] = output[2]
-
-    return 255-np.asarray(out,dtype='float32')+1 #hacky code but works
+    return out 
 
 
 
@@ -139,7 +142,7 @@ def perturb_multiscale_new(img, scale_factors, augmentation_params, target_shape
 if __name__ == '__main__':
     from PIL import Image
     import matplotlib.pyplot as plt
-    img = np.asarray(Image.open(os.getcwd()+'/data/train/09c25d76fc840b3a687b59d337e585f5/09c25d76fc840b3a687b59d337e585f5.png'))
+    img = np.asarray(skimage.img_as_float(Image.open(os.getcwd()+'/data/train/09c25d76fc840b3a687b59d337e585f5/09c25d76fc840b3a687b59d337e585f5.png')))#,dtype='float32')
     sfs = [1.0]
     patch_sizes = [(200,200)]
     rng_aug = np.random
@@ -148,4 +151,3 @@ if __name__ == '__main__':
     plt.subplot(120),plt.imshow(img),plt.title('original')
     plt.subplot(121),plt.imshow(test),plt.title('simple rotation')
     plt.subplot(122),plt.imshow(patches),plt.title('sander')
-
