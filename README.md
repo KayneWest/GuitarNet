@@ -12,4 +12,5 @@ Here are some good resources for CUDA:
     https://github.com/Theano/libgpuarray/issues/19
 
 To run this on a basic AWS GPU instance:
+    
     THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python nodatanet.py
