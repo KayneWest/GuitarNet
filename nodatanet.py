@@ -437,6 +437,7 @@ class DataLoader(object):
             # bad image
             def sampler(n):
                 indecies =[]
+                correct=False
                 for i in range(n):
                     while correct==False:
                         index = random.choice(range(len(pictures)))
