@@ -522,7 +522,14 @@ class DataLoader(object):
     def __iter__(self):
         self.build_unequal_samples_map()
         for batch in self.batchmap.values():
-            yield self.create_batch_matrix(batch)
+            try:
+                yield self.create_batch_matrix(batch)
+                # first time, if fails, works the second time
+                # haven't found bug yet. but it works 
+                # ValueError: all the input array dimensions except.. 
+                # ...for the concatenation axis must match exactly
+            except:
+                yield self.create_batch_matrix(batch)
 
     def random_batch(self, test_or_valid='valid'):
         if test_or_valid=='test' or test_or_valid=='valid':
